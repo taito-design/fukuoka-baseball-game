@@ -258,13 +258,14 @@ names.forEach(n=>{
   level3Groups[l3].units.push(n);
 });
 // ==== 音声(効果音・BGM) ====
-// いきなり大音量で鳴って驚かせないよう、デフォルトはミュート(サウンドボタンで明示的にONにする)、
-// 音量も控えめにしてある。設定はlocalStorageに保存して次回以降も覚えておく。
+// 音量は控えめにしてある。サウンドボタン(🔇/🔊)でON/OFFでき、設定はlocalStorageに
+// 保存して次回以降も覚えておく。
 const SE_FILES = {
   confirm: "audio/se/決定ボタンを押す44.mp3",
   hit: "audio/se/金属バットで打つ2.mp3",
   cheer: "audio/se/歓声.mp3",
   win: "audio/se/花火大会.mp3",
+  stadiumCheer: "audio/se/スタジアムの歓声.mp3",
   lose: "audio/se/間抜け5.mp3",
 };
 const BGM_FILES = { battle: "audio/bgm/試合用BGM1　cheering_pep_squad.mp3" };
@@ -922,6 +923,7 @@ function showDefeatSummary(candId, candName, onClose){
 // 勝利して吸収した直後に、何がどう変わったか(能力の伸び幅・新しく手に入ったタグ)を見せる。
 function showConquestSummary(candName, beforeStats, beforeLabels, onClose){
   playSE("win");
+  playSE("stadiumCheer");
   const deltaLine = ["bat","pitch","field"].map(k=>{
     const before = beforeStats[k], after = state[{bat:"aggBat",pitch:"aggPitch",field:"aggField"}[k]];
     const diff = after-before;
