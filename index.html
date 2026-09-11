@@ -89,6 +89,7 @@
   <button id="own-tags-detail-btn" style="padding:.3rem .6rem;font-size:.7rem;font-weight:700;border-radius:10px;">タグ詳細</button>
   <button id="train-btn" class="round-btn" title="練習する">🏋️練習</button>
   <button id="escalate-btn" class="round-btn gold" title="スケール移行" style="display:none;">🚀移行</button>
+  <button id="sound-toggle-btn" class="round-btn" title="サウンドON/OFF" style="background:var(--stone);color:var(--ink);">🔇</button>
 </div>
 <div id="map"></div>
 <div id="sheet">
@@ -256,6 +257,53 @@ names.forEach(n=>{
   if(!level3Groups[l3]) level3Groups[l3] = { pref: PREF_OF_LEVEL3[l3] || "福岡県", units: [] };
   level3Groups[l3].units.push(n);
 });
+// ==== 音声(効果音・BGM) ====
+// いきなり大音量で鳴って驚かせないよう、デフォルトはミュート(サウンドボタンで明示的にONにする)、
+// 音量も控えめにしてある。設定はlocalStorageに保存して次回以降も覚えておく。
+const SE_FILES = {
+  confirm: "audio/se/決定ボタンを押す44.mp3",
+  hit: "audio/se/金属バットで打つ2.mp3",
+  cheer: "audio/se/歓声.mp3",
+  win: "audio/se/花火大会.mp3",
+  lose: "audio/se/間抜け5.mp3",
+};
+const BGM_FILES = { battle: "audio/bgm/試合用BGM1　cheering_pep_squad.mp3" };
+const SE_VOLUME = 0.25, BGM_VOLUME = 0.12;
+let soundOn = false;
+try{ soundOn = localStorage.getItem("gikyo_fukuoka_sound") === "1"; }catch(e){}
+function setSoundOn(v){
+  soundOn = v;
+  try{ localStorage.setItem("gikyo_fukuoka_sound", v ? "1" : "0"); }catch(e){}
+  const btn = document.getElementById("sound-toggle-btn");
+  if(btn) btn.textContent = v ? "🔊" : "🔇";
+  if(!v) stopBGM();
+}
+const seCache = {};
+function playSE(name){
+  if(!soundOn) return;
+  try{
+    if(!seCache[name]) seCache[name] = new Audio(SE_FILES[name]);
+    const a = seCache[name].cloneNode(); // 連続で鳴らせるようクローンして再生
+    a.volume = SE_VOLUME;
+    a.play().catch(()=>{});
+  }catch(e){}
+}
+let currentBGM = null;
+function playBGM(name){
+  stopBGM();
+  if(!soundOn) return;
+  try{
+    currentBGM = new Audio(BGM_FILES[name]);
+    currentBGM.loop = true;
+    currentBGM.volume = BGM_VOLUME;
+    currentBGM.play().catch(()=>{});
+  }catch(e){}
+}
+function stopBGM(){
+  if(currentBGM){ currentBGM.pause(); currentBGM = null; }
+}
+document.getElementById("sound-toggle-btn").addEventListener("click", ()=>{ setSoundOn(!soundOn); });
+setSoundOn(soundOn); // 前回の設定(無ければOFF)をボタン表示に反映
 const TAG_ICON = { bat:"💥", pitch:"🥎", field:"🧤" };
 // タグは短いラベルだけだと「で、それが何?」となるので、タップで詳細(全文+施設系ならGoogleマップ
 // へのリンク)を見られるようにする。写真の埋め込みはArtifactのCSPで外部画像ドメインが使えないため不可。
@@ -694,6 +742,7 @@ function selectUnit(id){
 }
 document.getElementById("attack-btn").addEventListener("click", ()=>{
   if(!state.selected) return;
+  playSE("confirm");
   runBattle(state.selected);
 });
 
@@ -732,6 +781,7 @@ function showBattle(id, p, cc, final, outcome){
     + `<tr id="battle-row-c"><td>${candName}</td>${emptyInningCells}<td id="battle-total-c"></td></tr>`;
   document.getElementById("battle-result").textContent = "";
   document.getElementById("battle").style.display = "flex";
+  playBGM("battle");
   const closeBtn = document.getElementById("battle-close");
   closeBtn.disabled = true;
   const pCells = document.getElementById("battle-row-p").children;
@@ -751,8 +801,11 @@ function showBattle(id, p, cc, final, outcome){
       return;
     }
     revealCell(pCells[inning+1], p[inning]);
+    if(p[inning]>0){ playSE("hit"); playSE("cheer"); }
     setTimeout(()=>{
-      revealCell(cCells[inning+1], (final.skip && inning===8) ? "X" : cc[inning]);
+      const cVal = (final.skip && inning===8) ? "X" : cc[inning];
+      revealCell(cCells[inning+1], cVal);
+      if(typeof cVal==="number" && cVal>0){ playSE("hit"); playSE("cheer"); }
       inning++;
       setTimeout(step, 260);
     }, 220);
@@ -761,6 +814,7 @@ function showBattle(id, p, cc, final, outcome){
   closeBtn.onclick = ()=>{
     if(closeBtn.disabled) return;
     document.getElementById("battle").style.display = "none";
+    stopBGM();
     const finishTurn = ()=>{
       state.turnsLeft -= 1;
       document.getElementById("sheet").style.display = "none";
@@ -835,6 +889,7 @@ function cedeUnit(id, absorbedById){
   state.enemyAbsorbed.get(absorbedById).add(id);
 }
 function showDefeatSummary(candId, candName, onClose){
+  playSE("lose");
   const beforeStats = {bat:state.aggBat, pitch:state.aggPitch, field:state.aggField};
   const beforePop = totalPop();
   const cedeId = pickCedeTarget();
@@ -866,6 +921,7 @@ function showDefeatSummary(candId, candName, onClose){
 }
 // 勝利して吸収した直後に、何がどう変わったか(能力の伸び幅・新しく手に入ったタグ)を見せる。
 function showConquestSummary(candName, beforeStats, beforeLabels, onClose){
+  playSE("win");
   const deltaLine = ["bat","pitch","field"].map(k=>{
     const before = beforeStats[k], after = state[{bat:"aggBat",pitch:"aggPitch",field:"aggField"}[k]];
     const diff = after-before;
@@ -899,6 +955,7 @@ document.getElementById("escalate-btn").addEventListener("click", ()=>{
   document.getElementById("escalate-modal").style.display = "flex";
 });
 document.getElementById("escalate-confirm-btn").addEventListener("click", ()=>{
+  playSE("confirm");
   state.scaleTier = "level3";
   state.log.push(`▲ ${state.chimeraName}は町字での勢力拡大を打ち切り、市郡区スケールでの戦いに移行した`);
   // 既に市郡区内を全部取り込んでいたら、その市郡区は無傷でそのまま編入される
@@ -1035,6 +1092,7 @@ function selectStart(n){
 }
 document.getElementById("start-confirm-btn").addEventListener("click", ()=>{
   if(!selectedStartName) return;
+  playSE("confirm");
   document.getElementById("start-screen").style.display = "none";
   newGame(selectedStartName);
   renderAll();
