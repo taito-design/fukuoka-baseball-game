@@ -138,7 +138,10 @@
     <img id="conquest-img" style="display:block;max-width:220px;margin:0 auto .5rem;image-rendering:pixelated;">
     <h3 id="conquest-title" style="margin:.2rem 0 .6rem;font-family:'Yusei Magic',cursive;"></h3>
     <p id="conquest-delta" style="font-size:.95rem;line-height:1.8;margin:.5rem 0;"></p>
-    <p id="conquest-tags" style="font-size:.85rem;line-height:1.6;margin:.5rem 0 1rem;"></p>
+    <div style="margin:.5rem 0 1rem;">
+      <div style="font-size:.8rem;font-weight:700;margin-bottom:.3rem;">入手したタグ</div>
+      <div id="conquest-tags" style="font-size:.85rem;line-height:1.7;max-height:130px;overflow-y:auto;background:var(--paper-2);border:1.5px solid var(--ink);border-radius:8px;padding:.5rem .6rem;"></div>
+    </div>
     <button id="conquest-modal-close" style="width:100%;">よし!</button>
   </div>
 </div>
@@ -703,7 +706,10 @@ function finalizeBattle(battle){
 }
 function runBattle(id){
   const c = entityStats(id);
-  const formP = 0.25+Math.random()*1.85, formC = 0.25+Math.random()*1.85;
+  // 「今日の調子」は試合全体に効く倍率なので、昔の0.25〜2.1倍(8倍超の開き)だと実力差が
+  // 簡単にひっくり返ってただの運ゲーになっていた。±15%程度に抑えて、実力差がちゃんと
+  // 結果に反映されつつ、僅差の勝負では逆転もあり得る、というバランスにする。
+  const formP = 0.85+Math.random()*0.3, formC = 0.85+Math.random()*0.3;
   const p=[], cc=[];
   for(let i=0;i<9;i++){
     const stage = i<3?0:(i<6?1:2);
@@ -846,10 +852,11 @@ function showDefeatSummary(candId, candName, onClose){
   document.getElementById("defeat-title").textContent = `✗ ${candName}に敗北`;
   document.getElementById("defeat-body").textContent = bodyText;
   const afterPop = totalPop();
+  const chip = html => `<span style="white-space:nowrap;display:inline-block;margin-right:.8rem;">${html}</span>`;
   const deltaLine = cedeId ? ["bat","pitch","field"].map(k=>{
     const before = beforeStats[k], after = state[{bat:"aggBat",pitch:"aggPitch",field:"aggField"}[k]];
-    return `${TAG_ICON[k]}${before}→${after}(<b style="color:#888;">${after-before}</b>)`;
-  }).join(" ") + ` 👥${beforePop.toLocaleString()}→${afterPop.toLocaleString()}(<b style="color:#888;">${(afterPop-beforePop).toLocaleString()}</b>)` : "";
+    return chip(`${TAG_ICON[k]}${before}→${after}(<b style="color:#888;">${after-before}</b>)`);
+  }).join("") + chip(`👥${beforePop.toLocaleString()}→${afterPop.toLocaleString()}(<b style="color:#888;">${(afterPop-beforePop).toLocaleString()}</b>)`) : "";
   document.getElementById("defeat-delta").innerHTML = deltaLine;
   document.getElementById("defeat-modal").style.display = "flex";
   document.getElementById("defeat-modal-close").onclick = ()=>{
@@ -862,15 +869,15 @@ function showConquestSummary(candName, beforeStats, beforeLabels, onClose){
   const deltaLine = ["bat","pitch","field"].map(k=>{
     const before = beforeStats[k], after = state[{bat:"aggBat",pitch:"aggPitch",field:"aggField"}[k]];
     const diff = after-before;
-    return `${TAG_ICON[k]}${before}→${after}(<b style="color:${diff>0?'var(--green-pop)':'#888'};">${diff>=0?"+":""}${diff}</b>)`;
-  }).join(" ");
+    return `<span style="white-space:nowrap;display:inline-block;margin-right:.8rem;">${TAG_ICON[k]}${before}→${after}(<b style="color:${diff>0?'var(--green-pop)':'#888'};">${diff>=0?"+":""}${diff}</b>)</span>`;
+  }).join("");
   const newTags = [...state.tagMap.entries()].filter(([label])=>!beforeLabels.has(label)).map(([,t])=>t);
   document.getElementById("conquest-img").src = "assets/win.png";
   document.getElementById("conquest-title").textContent = `◎ ${candName}に勝利して吸収した`;
   document.getElementById("conquest-delta").innerHTML = deltaLine;
   document.getElementById("conquest-tags").innerHTML = newTags.length
-    ? "入手したタグ: " + newTags.map(t=>fmtTag(t, candName)).join(" / ")
-    : "入手した新しいタグはなし(既に持っているタグと重複)";
+    ? newTags.map(t=>fmtTag(t, candName)).join("<br>")
+    : "既に持っているタグと重複、新規入手なし";
   document.getElementById("conquest-modal").style.display = "flex";
   document.getElementById("conquest-modal-close").onclick = ()=>{
     document.getElementById("conquest-modal").style.display = "none";
