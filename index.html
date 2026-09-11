@@ -395,10 +395,20 @@ document.getElementById("own-tags-detail-btn").addEventListener("click", ()=>{
 });
 document.getElementById("own-tags-modal-close").addEventListener("click", ()=>{ document.getElementById("own-tags-modal").style.display = "none"; });
 // 練習モーダル: 施設をまとめて練習(個別ガチャ)/通常練習(施設不要・逓減)の2枠を出す。
+// 練習結果に表示する「実際に見えてる数値が何から何に変わったか」の行を作る
+// (ロールの生の伸び幅"+3"だけだと、雪だるま防止の圧縮を経た後の実際の変化量と一致しないため)。
+function statDeltaLine(before){
+  return ["bat","pitch","field"].map(k=>{
+    const after = state[{bat:"aggBat",pitch:"aggPitch",field:"aggField"}[k]];
+    const b = before[k], diff = after-b;
+    if(diff===0) return "";
+    return `<span style="white-space:nowrap;display:inline-block;margin-right:.6rem;">${TAG_ICON[k]}${b}→${after}(<b style="color:var(--green-pop);">+${diff}</b>)</span>`;
+  }).filter(Boolean).join("") || "(変化なし)";
+}
 function renderTrainingModal(lastResultHtml){
   const avail = availableFacilityTags();
   const totalSum = Math.round(avail.reduce((s,t)=>s+t.mult,0)*100)/100;
-  const nextGain = stat => Math.round(0.1*Math.pow(0.7,state.normalPracticeUses[stat])*100)/100;
+  const nextGain = stat => Math.round(3*Math.pow(0.7,state.normalPracticeUses[stat])*100)/100;
   const turnsLeft = state.turnsLeft;
   document.getElementById("training-body").innerHTML = `
     <div style="margin-bottom:1rem;padding-bottom:.8rem;border-bottom:1px solid #ccc;">
@@ -417,19 +427,23 @@ function renderTrainingModal(lastResultHtml){
   `;
   const facilityBtn = document.getElementById("do-facility-train");
   if(facilityBtn) facilityBtn.addEventListener("click", ()=>{
+    const before = {bat:state.aggBat, pitch:state.aggPitch, field:state.aggField};
     const results = doFacilityTraining();
     if(!results) return;
-    const html = "🎲 結果:<br>" + results.map(r=>`${TAG_ICON[r.stat]} ${r.label.split(/[(（]/)[0].trim()}: <b>${r.roll}</b> (+${r.gain})`).join("<br>");
+    const rollList = "🎲 結果:<br>" + results.map(r=>`${TAG_ICON[r.stat]} ${r.label.split(/[(（]/)[0].trim()}: <b>${r.roll}</b> (+${r.gain})`).join("<br>");
     renderAll();
+    const html = rollList + `<div style="margin-top:.5rem;">実際の変化: ${statDeltaLine(before)}</div>`;
     if(!gameEnded) renderTrainingModal(html);
   });
   document.querySelectorAll(".normal-train-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const stat = btn.dataset.stat;
+      const before = {bat:state.aggBat, pitch:state.aggPitch, field:state.aggField};
       const gain = doNormalTraining(stat);
       if(gain==null) return;
       renderAll();
-      if(!gameEnded) renderTrainingModal(`${TAG_ICON[stat]} 通常練習: +${gain}`);
+      const html = `${TAG_ICON[stat]} 通常練習: 伸び幅+${gain}<div style="margin-top:.5rem;">実際の変化: ${statDeltaLine(before)}</div>`;
+      if(!gameEnded) renderTrainingModal(html);
     });
   });
 }
@@ -495,12 +509,15 @@ const POP_BASE_K = 15;
 function rawBase(id){ return Math.log(UNITS[id].pop+1)*POP_BASE_K; }
 // 陣地を増やすほど・タグを集めるほど雪だるま式に強くなりすぎる問題への対策。
 // 単体(1ユニットのrawBaseや、baseStatsが見る単体ユニットのタグ)はそのまま計算するが、
-// 複数を合算した「自軍の総力」「タグ倍率の合計」には平方根の頭打ちをかけ、伸びを鈍らせる。
+// 複数を合算した「自軍の総力」「タグ倍率の合計」には頭打ちをかけ、伸びを鈍らせる。
+// 平方根(0.5乗)だと15地域くらい取ると3倍以上に伸びてまだ雪だるま感が強かったため、
+// もっと強めの0.3乗に変更(15地域で約2.1倍程度に抑える)。
 // 係数は「よくある1ユニット分の強さ/1タグ分の倍率」あたりで圧縮前後がほぼ一致するよう逆算した値
 // (小さいうちは今までの感触に近く、増えるほど頭打ちが効いてくる)。
-const RAWBASE_SUM_K = 13.5;
-const TAGMULT_SUM_K = 1.22;
-function compressSum(sum, k){ return Math.sqrt(Math.max(sum,0))*k; }
+const COMPRESS_POWER = 0.3;
+const RAWBASE_SUM_K = 38.1;
+const TAGMULT_SUM_K = 1.33;
+function compressSum(sum, k){ return Math.pow(Math.max(sum,0), COMPRESS_POWER)*k; }
 function recomputeAgg(){
   const rawMultSum = {bat:0, pitch:0, field:0};
   let pitchTagCount = 0;
