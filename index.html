@@ -269,8 +269,8 @@ const SE_FILES = {
 };
 const BGM_FILES = { battle: "audio/bgm/試合用BGM1　cheering_pep_squad.mp3" };
 const SE_VOLUME = 0.25, BGM_VOLUME = 0.12;
-let soundOn = false;
-try{ soundOn = localStorage.getItem("gikyo_fukuoka_sound") === "1"; }catch(e){}
+let soundOn = true; // デフォルトはON。前回OFFにしてたらその設定を覚えておく。
+try{ const saved = localStorage.getItem("gikyo_fukuoka_sound"); if(saved !== null) soundOn = saved === "1"; }catch(e){}
 function setSoundOn(v){
   soundOn = v;
   try{ localStorage.setItem("gikyo_fukuoka_sound", v ? "1" : "0"); }catch(e){}
