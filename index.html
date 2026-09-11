@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>福岡・北九州版検証</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yusei+Magic&family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap">
+<style>
+  /* ==== ポップ×ペーパークラフトのトークン(3D地図側の配色 owned/candidate/locked/edge と揃えてある) ==== */
+  :root{
+    --paper:#F2E6C9; --paper-2:#EAD9AE; --ink:#2A2321;
+    --green:#2F5233; --green-pop:#4C8C5C;
+    --rust:#C1502E; --rust-deep:#9C3A1E;
+    --gold:#F2B705; --stone:#B9B2A6;
+  }
+  html,body{margin:0;height:100%;background:#1b1f1d;color:var(--paper);font-family:'M PLUS Rounded 1c',sans-serif;overflow:hidden;}
+  #map{position:fixed;inset:0;}
+  #hud{position:fixed;top:10px;left:10px;right:10px;display:flex;gap:.4rem;font-size:.78rem;z-index:5;flex-wrap:wrap;}
+  #hud span{background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:12px;padding:.28rem .6rem;box-shadow:0 3px 0 var(--ink);font-weight:700;white-space:nowrap;}
+  #hud span b, #hud span i{font-family:'Yusei Magic',cursive;font-style:normal;color:var(--rust-deep);}
+  #ownbar{position:fixed;top:58px;left:10px;right:10px;display:flex;gap:.4rem;flex-wrap:wrap;z-index:5;align-items:center;}
+  #ownbar>span{background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:12px;padding:.3rem .6rem;font-size:.78rem;font-weight:700;box-shadow:0 3px 0 var(--ink);}
+  #ownbar>span b{font-family:'Yusei Magic',cursive;color:var(--rust-deep);}
+  #own-tags-summary{background:var(--paper-2)!important;color:var(--ink)!important;border:1.5px solid var(--ink)!important;box-shadow:none!important;font-size:.75rem;}
+  .round-btn{height:2.4rem;padding:0 .7rem;border-radius:1.2rem;font-size:.72rem;font-weight:700;display:inline-flex;align-items:center;gap:.25rem;background:var(--green);color:var(--paper);white-space:nowrap;}
+  .round-btn.gold{background:var(--gold);color:var(--ink);}
+  #sheet, #start-sheet{position:fixed;left:0;right:0;bottom:0;background:var(--paper);color:var(--ink);border-top:3px solid var(--ink);border-radius:20px 20px 0 0;padding:1rem;box-sizing:border-box;z-index:5;display:none;max-height:50%;overflow-y:auto;box-shadow:0 -6px 0 rgba(0,0,0,.15);}
+  #sheet h3, #start-sheet h3{margin:.2rem 0;font-family:'Yusei Magic',cursive;font-size:1.15rem;}
+  #start-screen{position:fixed;inset:0;background:#1b1f1d;z-index:20;color:var(--paper);}
+  #step-pref, #step-level3{padding:0;height:100%;overflow-y:auto;box-sizing:border-box;}
+  #step-map{position:absolute;inset:0;display:none;flex-direction:column;min-height:0;}
+  .step-header{padding:1rem 1rem .5rem;font-size:1rem;font-weight:700;font-family:'Yusei Magic',cursive;position:sticky;top:0;background:#1b1f1d;}
+  .back-btn{margin:0 1rem .5rem;background:var(--stone);color:var(--ink);padding:.4rem .8rem;font-size:.8rem;box-shadow:0 3px 0 var(--ink);}
+  .list{padding:0 1rem 1rem;}
+  .list-item{padding:.8rem;border-bottom:1px solid #3a3530;cursor:pointer;}
+  .list-item:hover{background:#2a2f2c;}
+  #start-map{flex:1;position:relative;min-height:0;}
+  #start-title{padding:.8rem 1rem;font-size:.85rem;background:rgba(0,0,0,.4);}
+  button{padding:.6rem 1rem;border:2px solid var(--ink);border-radius:12px;background:var(--rust);color:var(--paper);font-weight:700;font-family:'M PLUS Rounded 1c',sans-serif;box-shadow:0 4px 0 var(--rust-deep);cursor:pointer;transition:transform .05s;}
+  button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--rust-deep);}
+  button:disabled{background:var(--stone);color:#665f56;box-shadow:0 4px 0 #7d766b;cursor:default;}
+  button:disabled:active{transform:none;}
+  .map-pin{position:absolute;pointer-events:auto;background:var(--paper);color:var(--ink);border:1.5px solid var(--ink);padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap;transform:translate(-50%,-100%);cursor:pointer;box-shadow:0 2px 0 var(--ink);}
+  .map-pin.owned{background:var(--green-pop);color:var(--paper);}
+  .map-pin.candidate{background:var(--rust);color:var(--paper);}
+  #battle{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:30;display:none;align-items:center;justify-content:center;}
+  #battle .box{background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:1.2rem;border-radius:16px;max-width:90%;box-shadow:0 10px 0 rgba(0,0,0,.18);}
+  #battle-title{font-family:'Yusei Magic',cursive;}
+  @keyframes cellPop{0%{transform:scale(1.7);color:var(--rust-deep);}100%{transform:scale(1);color:var(--ink);}}
+  .cell-pop{display:inline-block;animation:cellPop .22s ease-out;}
+  table{border-collapse:collapse;font-size:.8rem;}
+  td,th{padding:.3rem .5rem;text-align:center;}
+</style>
+</head>
+<body>
+<div id="start-screen">
+  <div id="step-pref">
+    <div class="step-header">都道府県を選んでください</div>
+    <div id="pref-list" class="list"></div>
+  </div>
+  <div id="step-level3" style="display:none;">
+    <div class="step-header" id="level3-title">市区郡を選んでください</div>
+    <button class="back-btn" id="back-to-pref">← 都道府県に戻る</button>
+    <div id="level3-list" class="list"></div>
+  </div>
+  <div id="step-map">
+    <div id="start-title">🗾 ドラッグで視点回転・地元をタップして選んでください</div>
+    <button class="back-btn" id="back-to-level3">← 市区郡選択に戻る</button>
+    <div id="start-map"></div>
+    <div id="start-sheet">
+      <h3 id="start-sel-name">-</h3>
+      <p id="start-sel-info"></p>
+      <p id="start-sel-tags" style="color:#a5461f;"></p>
+      <button id="start-confirm-btn" disabled>ここから始める</button>
+    </div>
+  </div>
+</div>
+<div id="hud">
+  <span>🚩 <b id="hud-name"></b></span>
+  <span>⏳ <b id="hud-turns"></b></span>
+  <span>🧩 <span id="hud-count"></span>/<span id="hud-total"></span></span>
+  <span>👥 <span id="hud-pop"></span>人</span>
+  <span>🗺️ <span id="hud-score"></span>km²</span>
+</div>
+<div id="ownbar">
+  <span>💥<b id="own-bat"></b></span>
+  <span>🥎<b id="own-pitch"></b></span>
+  <span>🧤<b id="own-field"></b></span>
+  <span id="own-tags-summary"></span>
+  <button id="own-tags-detail-btn" style="padding:.3rem .6rem;font-size:.7rem;font-weight:700;border-radius:10px;">タグ詳細</button>
+  <button id="train-btn" class="round-btn" title="練習する">🏋️練習</button>
+  <button id="escalate-btn" class="round-btn gold" title="スケール移行" style="display:none;">🚀移行</button>
+</div>
+<div id="map"></div>
+<div id="sheet">
+  <h3 id="sel-name"></h3>
+  <p id="sel-info"></p>
+  <p id="sel-tags" style="color:#a5461f;"></p>
+  <button id="attack-btn">⚔️ この地域を攻める</button>
+</div>
+<div id="battle"><div class="box">
+  <h3 id="battle-title"></h3>
+  <table id="battle-table"></table>
+  <p id="battle-result" style="font-weight:700;"></p>
+  <button id="battle-close">つぎへ</button>
+</div></div>
+<div id="tag-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:1.2rem;border-radius:12px;max-width:90%;width:360px;">
+    <h3 id="tag-modal-title" style="margin:.2rem 0 .8rem;"></h3>
+    <p id="tag-modal-body" style="font-size:.9rem;line-height:1.5;"></p>
+    <div id="tag-modal-links" style="display:flex;flex-direction:column;gap:.4rem;"></div>
+    <button id="tag-modal-close" style="margin-top:1rem;width:100%;">閉じる</button>
+  </div>
+</div>
+<div id="own-tags-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:45;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:1.2rem;border-radius:12px;max-width:90%;width:420px;max-height:75vh;display:flex;flex-direction:column;">
+    <h3 style="margin:.2rem 0 .6rem;">🚩 自軍タグ一覧</h3>
+    <div id="own-tags-modal-body" style="font-size:.85rem;line-height:1.9;overflow-y:auto;flex:1;"></div>
+    <button id="own-tags-modal-close" style="margin-top:1rem;width:100%;">閉じる</button>
+  </div>
+</div>
+<div id="training-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:46;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:1.2rem;border-radius:12px;max-width:90%;width:400px;max-height:80vh;display:flex;flex-direction:column;">
+    <h3 style="margin:.2rem 0 .6rem;">🏋️ 練習</h3>
+    <div id="training-body" style="font-size:.85rem;line-height:1.6;overflow-y:auto;flex:1;"></div>
+    <button id="training-modal-close" style="margin-top:1rem;width:100%;">閉じる</button>
+  </div>
+</div>
+<div id="escalate-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:46;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:1.2rem;border-radius:12px;max-width:90%;width:380px;">
+    <h3 style="margin:.2rem 0 .6rem;">🚀 市郡区スケールへ移行する</h3>
+    <div id="escalate-modal-body" style="font-size:.85rem;line-height:1.6;margin-bottom:1rem;"></div>
+    <button id="escalate-confirm-btn" style="width:100%;margin-bottom:.5rem;">移行する(不可逆)</button>
+    <button id="escalate-modal-close" style="width:100%;background:var(--stone);color:var(--ink);box-shadow:0 4px 0 #7d766b;">やめておく</button>
+  </div>
+</div>
+<div id="conquest-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:47;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:1.2rem;border-radius:12px;max-width:90%;width:400px;">
+    <img id="conquest-img" style="display:block;max-width:220px;margin:0 auto .5rem;image-rendering:pixelated;">
+    <h3 id="conquest-title" style="margin:.2rem 0 .6rem;font-family:'Yusei Magic',cursive;"></h3>
+    <p id="conquest-delta" style="font-size:.95rem;line-height:1.8;margin:.5rem 0;"></p>
+    <p id="conquest-tags" style="font-size:.85rem;line-height:1.6;margin:.5rem 0 1rem;"></p>
+    <button id="conquest-modal-close" style="width:100%;">よし!</button>
+  </div>
+</div>
+<div id="defeat-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:47;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--paper);color:var(--ink);border:3px solid var(--ink);padding:1.2rem;border-radius:12px;max-width:90%;width:400px;">
+    <img id="defeat-img" style="display:block;max-width:220px;margin:0 auto .5rem;image-rendering:pixelated;">
+    <h3 id="defeat-title" style="margin:.2rem 0 .6rem;font-family:'Yusei Magic',cursive;color:var(--rust-deep);"></h3>
+    <p id="defeat-body" style="font-size:.9rem;line-height:1.6;margin:.5rem 0;"></p>
+    <p id="defeat-delta" style="font-size:.95rem;line-height:1.8;margin:.5rem 0 1rem;"></p>
+    <button id="defeat-modal-close" style="width:100%;background:var(--stone);color:var(--ink);box-shadow:0 4px 0 #7d766b;">くやしい…</button>
+  </div>
+</div>
+<div id="end-screen" style="position:fixed;inset:0;background:#1b1f1d;z-index:40;display:none;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center;padding:2rem;box-sizing:border-box;">
+  <h2>🏁 ラン終了</h2>
+  <p id="end-name" style="font-size:1.2rem;"></p>
+  <p id="end-score" style="font-size:2rem;font-weight:700;color:#ffd976;"></p>
+  <p id="end-best" style="color:#aaa;"></p>
+  <button id="end-restart-btn">🔄 もう一度</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data/fukuoka_map.js"></script>
+<script>
+// ==== 3D地図モジュール(既存と同じ) ====
+function ringsToGroup(rings, colorHex, opacity, height, pickId){
+  const group = new THREE.Group();
+  rings.forEach(ring=>{
+    const shape = new THREE.Shape();
+    ring.forEach(([x,y],i)=>{ if(i===0) shape.moveTo(x,y); else shape.lineTo(x,y); });
+    const geo = new THREE.ExtrudeGeometry(shape, {depth:height, bevelEnabled:false});
+    geo.rotateX(-Math.PI/2);
+    const mat = new THREE.MeshLambertMaterial({color:colorHex, transparent:true, opacity});
+    const mesh = new THREE.Mesh(geo, mat);
+    if(pickId){ mesh.userData.pickId = pickId; }
+    group.add(mesh);
+    const edgeGeo = new THREE.EdgesGeometry(geo, 25);
+    const edgeMat = new THREE.LineBasicMaterial({color:0x2A2321, transparent:true, opacity:Math.min(opacity+0.15,1)});
+    group.add(new THREE.LineSegments(edgeGeo, edgeMat));
+  });
+  return group;
+}
+const COLOR = { owned:0x2F5233, candidate:0xC1502E, locked:0xB9B2A6 };
+function createMapContext(containerId){
+  const el = document.getElementById(containerId);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 1, 4000);
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  el.appendChild(renderer.domElement);
+  renderer.domElement.style.touchAction = "none";
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.55);
+  dl.position.set(100,220,140);
+  scene.add(dl);
+  const raycaster = new THREE.Raycaster();
+  const pinLayer = document.createElement("div");
+  pinLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;";
+  el.appendChild(pinLayer);
+  const ctx = { el, scene, camera, renderer, raycaster, pinLayer, layerGroup:null, pickables:[], pinDefs:[], onPick:null,
+    cam:{ tx:0, tz:0, radius:200, theta:Math.PI*0.28, phi:0.95 } };
+  function resize(){ const w=el.clientWidth||300,h=el.clientHeight||300; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h); render(); }
+  ctx.resize = resize;
+  new ResizeObserver(resize).observe(el);
+  function updateCameraPos(){ const {tx,tz,radius,theta,phi}=ctx.cam; const x=tx+radius*Math.sin(phi)*Math.sin(theta); const y=radius*Math.cos(phi); const z=tz+radius*Math.sin(phi)*Math.cos(theta); camera.position.set(x, Math.max(y,3), z); camera.lookAt(tx,0,tz); }
+  ctx.updateCameraPos = updateCameraPos;
+  function updatePins(){ const w=el.clientWidth||1,h=el.clientHeight||1; ctx.pinDefs.forEach(d=>{ const v=new THREE.Vector3(d.x,d.y,d.z); v.project(camera); const behind=v.z>1||v.z<-1; d.el.style.display=behind?"none":"block"; if(!behind){ const sx=(v.x*0.5+0.5)*w, sy=(-v.y*0.5+0.5)*h; d.el.style.transform=`translate(${sx}px, ${sy}px) translate(-50%,-100%)`; } }); }
+  function render(){ updateCameraPos(); renderer.render(scene, camera); updatePins(); }
+  ctx.render = render;
+  ctx.setPins = function(defs){ pinLayer.innerHTML=""; ctx.pinDefs = defs.map(d=>{ const pinEl=document.createElement("div"); pinEl.className="map-pin"+(d.variant?(" "+d.variant):""); pinEl.innerHTML=d.html; pinEl.style.pointerEvents="auto"; if(d.onClick) pinEl.addEventListener("click", e=>{ e.stopPropagation(); d.onClick(); }); pinLayer.appendChild(pinEl); return {...d, el:pinEl}; }); };
+  let dragging=false,lastX=0,lastY=0,moved=0,pinchDist=null,pinchRadius0=null,lastMidX=0,lastMidY=0;
+  const pts = new Map();
+  function screenToNDC(x,y){ const r=el.getBoundingClientRect(); return { x:((x-r.left)/r.width)*2-1, y:-((y-r.top)/r.height)*2+1 }; }
+  function tryPick(clientX, clientY){ const ndc=screenToNDC(clientX, clientY); raycaster.setFromCamera(ndc, camera); const hits=raycaster.intersectObjects(ctx.pickables, false); if(hits.length && ctx.onPick){ ctx.onPick(hits[0].object.userData.pickId); } }
+  // 2本指ドラッグでパン(注視点を移動)。カメラの実際のright軸+地面に投影したforward軸を使うので
+  // 回転角度がどうであっても画面の動きと一致する。
+  function panCamera(dxScreen, dyScreen){
+    const panSpeed = ctx.cam.radius * 0.0016;
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const fwd = { x: Math.sin(ctx.cam.theta), z: Math.cos(ctx.cam.theta) };
+    ctx.cam.tx -= right.x * dxScreen * panSpeed;
+    ctx.cam.tz -= right.z * dxScreen * panSpeed;
+    ctx.cam.tx += fwd.x * dyScreen * panSpeed;
+    ctx.cam.tz += fwd.z * dyScreen * panSpeed;
+  }
+  el.addEventListener("pointerdown", e=>{ pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===1){ dragging=true; lastX=e.clientX; lastY=e.clientY; moved=0; } else if(pts.size===2){ dragging=false; const arr=[...pts.values()]; pinchDist=Math.hypot(arr[0].x-arr[1].x, arr[0].y-arr[1].y); pinchRadius0=ctx.cam.radius; lastMidX=(arr[0].x+arr[1].x)/2; lastMidY=(arr[0].y+arr[1].y)/2; } });
+  el.addEventListener("pointermove", e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===2){ const arr=[...pts.values()]; const d=Math.hypot(arr[0].x-arr[1].x, arr[0].y-arr[1].y); if(pinchDist){ ctx.cam.radius=Math.max(3, Math.min(2000, pinchRadius0*(pinchDist/d))); } const midX=(arr[0].x+arr[1].x)/2, midY=(arr[0].y+arr[1].y)/2; panCamera(midX-lastMidX, midY-lastMidY); lastMidX=midX; lastMidY=midY; render(); return; } if(!dragging) return; const dx=e.clientX-lastX, dy=e.clientY-lastY; moved+=Math.abs(dx)+Math.abs(dy); ctx.cam.theta-=dx*0.006; ctx.cam.phi=Math.max(0.18, Math.min(1.45, ctx.cam.phi-dy*0.005)); lastX=e.clientX; lastY=e.clientY; render(); });
+  function endPtr(e){ if(pts.has(e.pointerId) && pts.size<=1 && moved<6){ tryPick(e.clientX, e.clientY); } pts.delete(e.pointerId); if(pts.size<2) pinchDist=null; if(pts.size===0) dragging=false; }
+  el.addEventListener("pointerup", endPtr);
+  el.addEventListener("pointercancel", endPtr);
+  el.addEventListener("pointerleave", e=>{ if(pts.size===1){ pts.delete(e.pointerId); dragging=false; } });
+  el.addEventListener("wheel", e=>{ e.preventDefault(); ctx.cam.radius=Math.max(3, Math.min(2000, ctx.cam.radius*(1+e.deltaY*0.0012))); render(); }, {passive:false});
+  ctx.setLayers = function(buildFn){ if(ctx.layerGroup) scene.remove(ctx.layerGroup); ctx.pickables=[]; const group=new THREE.Group(); buildFn(group, ctx.pickables); scene.add(group); ctx.layerGroup=group; render(); };
+  ctx.setCamera = function(tx,tz,radius,phi){ ctx.cam.tx=tx; ctx.cam.tz=tz; ctx.cam.radius=radius; if(phi!==undefined) ctx.cam.phi=phi; render(); };
+  requestAnimationFrame(()=>{ resize(); });
+  return ctx;
+}
+function addUnitLayer(group, pickables, id, rings, role, height){
+  const g = ringsToGroup(rings, COLOR[role], role==="locked"?0.5:0.95, height, role!=="locked"?id:null);
+  group.add(g);
+  if(role!=="locked") g.children.forEach(m=>{ if(m.isMesh) pickables.push(m); });
+}
+
+// ==== ゲームロジック ====
+const UNITS = FUKUOKA_MAP;
+const names = Object.keys(UNITS);
+// 3階層(市郡区)のグルーピング。スケールアップ機能と県選択画面の両方から使うので先に作っておく。
+const PREF_OF_LEVEL3 = { "下関市": "山口県" }; // それ以外は全部福岡県
+const level3Groups = {}; // level3名 -> { pref, units:[id,...] }
+names.forEach(n=>{
+  const u = UNITS[n];
+  const l3 = u.level3 || "その他";
+  if(!level3Groups[l3]) level3Groups[l3] = { pref: PREF_OF_LEVEL3[l3] || "福岡県", units: [] };
+  level3Groups[l3].units.push(n);
+});
+const TAG_ICON = { bat:"💥", pitch:"🥎", field:"🧤" };
+// タグは短いラベルだけだと「で、それが何?」となるので、タップで詳細(全文+施設系ならGoogleマップ
+// へのリンク)を見られるようにする。写真の埋め込みはArtifactのCSPで外部画像ドメインが使えないため不可。
+const PLACE_KEYWORDS = ["球場","センター","ドーム","スタジアム","グラウンド","公園","クラブ","ボーイズ","リーグ","チーム","ショップ","店","運動公園"];
+function tagIsPlace(t){ return PLACE_KEYWORDS.some(k=>t.label.includes(k)); }
+// タグを見た目でジャンル分けして識別しやすくする(人物/施設/チーム/出来事/トリビア)。
+// キーワード判定なので厳密ではないが、色分けの目安として十分。
+const GENRE_RULES = [
+  { key:"person", icon:"🧑", label:"人物", color:"#c2255c", keywords:["選手","投手","捕手","内野手","外野手","二塁手","三塁手","監督","OB","出身","育ち","首位打者","本塁打王","ゴールデングラブ","沢村賞","MVP","名球会","ドラフト"] },
+  { key:"event", icon:"📅", label:"出来事", color:"#1971c2", keywords:["甲子園","日本シリーズ","優勝","準優勝","初出場","初勝利","連覇","開催歴","大会"] },
+  { key:"team", icon:"👥", label:"チーム", color:"#2f9e44", keywords:["ボーイズ","ジュニア","クラブ","リーグ","高校","高等学校","社会人","実業団","アマチュア","硬式野球チーム","軟式野球チーム","スクール","教室"] },
+  { key:"facility", icon:"🏟️", label:"施設", color:"#e8590c", keywords:["球場","センター","ドーム","スタジアム","グラウンド","公園","ショップ","店","運動公園"] },
+];
+// ジャンルを優先順位固定ではなく「ラベル内で一番手前に出てくるキーワード」で判定する。
+// 例えば施設の説明文に「高校野球の会場」という言葉が入っていても、先頭の「球場」に反応して
+// 施設と判定されるようにするため(固定優先順位だと後方の語に引っ張られて誤判定しやすい)。
+// ただし「〇〇高校出身・氏名(元近鉄ほか外野手)」のように、個人の守備位置を表す語が入っている
+// 場合は、たとえ手前に「高校」等が来ていても個人の話なので人物を優先する。
+const PERSON_OVERRIDE_KEYWORDS = ["投手","捕手","内野手","外野手","二塁手","三塁手","遊撃手","一塁手","監督","沢村賞","首位打者","本塁打王","ゴールデングラブ","名球会","MVP","防御率","セーブ","ホールド","安打"];
+const TRIVIA_GENRE = { key:"trivia", icon:"🎲", label:"トリビア", color:"#7048e8" };
+function computeTagGenre(t){
+  if(PERSON_OVERRIDE_KEYWORDS.some(k=>t.label.includes(k)) || /\d+勝/.test(t.label)) return GENRE_RULES.find(g=>g.key==="person");
+  let best = null, bestIdx = Infinity;
+  GENRE_RULES.forEach(g=>{
+    g.keywords.forEach(k=>{
+      const idx = t.label.indexOf(k);
+      if(idx !== -1 && idx < bestIdx){ bestIdx = idx; best = g; }
+    });
+  });
+  return best || TRIVIA_GENRE;
+}
+// データに焼き込み済みのgenre属性を最優先で使う(施設練習の対象判定に関わるため、
+// その場のキーワード再判定ではなく確定値を見る)。無ければ従来通りその場で判定する。
+function tagGenre(t){
+  if(t.genre) return GENRE_RULES.find(g=>g.key===t.genre) || TRIVIA_GENRE;
+  return computeTagGenre(t);
+}
+let tagRegistry = [];
+function fmtTag(t, areaName){
+  const idx = tagRegistry.length;
+  tagRegistry.push({ t, areaName });
+  const g = tagGenre(t);
+  return `<span class="tag-clickable" onclick="openTagModal(${idx})" style="cursor:pointer;text-decoration:underline dotted;border-left:3px solid ${g.color};padding-left:3px;margin-right:2px;">${g.icon}${TAG_ICON[t.stat]}+${t.mult} ${t.label}</span>`;
+}
+// タグの関連リンクを組み立てる。ソースURLが分かっている場合はそれを最優先、
+// 施設系は常にGoogleマップも添える。それ以外(ソースURL無し)はジャンルに応じて
+// Wikipedia検索/Google検索へのフォールバックリンクを出す(実在しないURLの捏造を避けるため検索リンクにする)。
+function tagLinks(t, g, placeName, areaName){
+  const links = [];
+  if(t.url) links.push({ label:"🔗 ソースを見る ↗", href:t.url });
+  if(tagIsPlace(t)) links.push({ label:"📍 Googleマップで見る ↗", href:"https://www.google.com/maps/search/"+encodeURIComponent(placeName+" "+(areaName||"")) });
+  if(!t.url){
+    if(g.key==="person") links.push({ label:"📖 Wikipediaで調べる ↗", href:"https://ja.wikipedia.org/w/index.php?search="+encodeURIComponent(placeName) });
+    else if(!tagIsPlace(t)) links.push({ label:"🔍 詳しく調べる ↗", href:"https://www.google.com/search?q="+encodeURIComponent(placeName) });
+  }
+  return links;
+}
+function openTagModal(idx){
+  const { t, areaName } = tagRegistry[idx];
+  const g = tagGenre(t);
+  const placeName = t.label.split(/[(（]/)[0].trim();
+  document.getElementById("tag-modal-title").innerHTML = `${TAG_ICON[t.stat]} ${placeName} <span style="font-size:.7rem;font-weight:400;color:${g.color};border:1px solid ${g.color};border-radius:8px;padding:1px 6px;margin-left:.3rem;">${g.icon}${g.label}</span>`;
+  document.getElementById("tag-modal-body").textContent = t.label;
+  document.getElementById("tag-modal-links").innerHTML = tagLinks(t, g, placeName, areaName)
+    .map(l=>`<a href="${l.href}" target="_blank" rel="noopener" style="color:#a5461f;font-weight:700;text-decoration:none;">${l.label}</a>`).join("");
+  document.getElementById("tag-modal").style.display = "flex";
+}
+document.getElementById("tag-modal-close").addEventListener("click", ()=>{ document.getElementById("tag-modal").style.display = "none"; });
+// 常時表示のownbarは狭いので、タグはジャンル別の件数だけ出す。全文は「タグ詳細」ボタンでモーダル表示。
+function renderOwnTagsSummary(){
+  const tags = [...state.tagMap.values()];
+  const counts = {};
+  tags.forEach(t=>{ const g = tagGenre(t).key; counts[g] = (counts[g]||0)+1; });
+  document.getElementById("own-tags-summary").innerHTML = GENRE_RULES.concat([{key:"trivia",icon:"🎲",label:"トリビア"}])
+    .filter(g=>counts[g.key]>0).map(g=>`${g.icon}${counts[g.key]}`).join(" ");
+}
+document.getElementById("own-tags-detail-btn").addEventListener("click", ()=>{
+  const tags = [...state.tagMap.values()];
+  document.getElementById("own-tags-modal-body").innerHTML = tags.length
+    ? tags.map(t=>{
+        const marker = t.genre==="facility"
+          ? (state.usedFacilityLabels.has(t.label) ? ' <span style="color:#888;font-size:.75rem;">(練習済み)</span>' : ' <span style="color:#2f6b3a;font-size:.75rem;">(練習で使える)</span>')
+          : "";
+        return fmtTag(t, state.chimeraName) + marker;
+      }).join("<br>")
+    : "まだタグなし";
+  document.getElementById("own-tags-modal").style.display = "flex";
+});
+document.getElementById("own-tags-modal-close").addEventListener("click", ()=>{ document.getElementById("own-tags-modal").style.display = "none"; });
+// 練習モーダル: 施設をまとめて練習(個別ガチャ)/通常練習(施設不要・逓減)の2枠を出す。
+function renderTrainingModal(lastResultHtml){
+  const avail = availableFacilityTags();
+  const totalSum = Math.round(avail.reduce((s,t)=>s+t.mult,0)*100)/100;
+  const nextGain = stat => Math.round(0.1*Math.pow(0.7,state.normalPracticeUses[stat])*100)/100;
+  const turnsLeft = state.turnsLeft;
+  document.getElementById("training-body").innerHTML = `
+    <div style="margin-bottom:1rem;padding-bottom:.8rem;border-bottom:1px solid #ccc;">
+      <b>🏟️ 施設をまとめて練習する</b><br>
+      <span style="font-size:.8rem;color:#555;">未使用の所有施設${avail.length}個(数値の合計${totalSum})を1ターンでまとめて消費。施設ごとに個別にガチャ(大成功+50%が20%/普通そのままが60%/伸び悩み半分が20%)。数が多いほど平均に近づく。</span><br>
+      <button id="do-facility-train" style="margin-top:.4rem;width:100%;" ${avail.length===0||turnsLeft<=0?"disabled":""}>実行する(残り${turnsLeft}ターン)</button>
+    </div>
+    <div>
+      <b>🎽 通常練習(施設不要・誰でも可)</b><br>
+      <span style="font-size:.8rem;color:#555;">同じ能力を繰り返すほど伸びが小さくなる、最低保証の練習。</span><br>
+      <button data-stat="bat" class="normal-train-btn" style="margin:.3rem 0;width:100%;" ${turnsLeft<=0?"disabled":""}>💥打撃を練習(見込み+${nextGain("bat")})</button>
+      <button data-stat="pitch" class="normal-train-btn" style="margin:.3rem 0;width:100%;" ${turnsLeft<=0?"disabled":""}>🥎投球を練習(見込み+${nextGain("pitch")})</button>
+      <button data-stat="field" class="normal-train-btn" style="margin:.3rem 0;width:100%;" ${turnsLeft<=0?"disabled":""}>🧤守備を練習(見込み+${nextGain("field")})</button>
+    </div>
+    ${lastResultHtml ? `<div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid #ccc;">${lastResultHtml}</div>` : ""}
+  `;
+  const facilityBtn = document.getElementById("do-facility-train");
+  if(facilityBtn) facilityBtn.addEventListener("click", ()=>{
+    const results = doFacilityTraining();
+    if(!results) return;
+    const html = "🎲 結果:<br>" + results.map(r=>`${TAG_ICON[r.stat]} ${r.label.split(/[(（]/)[0].trim()}: <b>${r.roll}</b> (+${r.gain})`).join("<br>");
+    renderAll();
+    if(!gameEnded) renderTrainingModal(html);
+  });
+  document.querySelectorAll(".normal-train-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const stat = btn.dataset.stat;
+      const gain = doNormalTraining(stat);
+      if(gain==null) return;
+      renderAll();
+      if(!gameEnded) renderTrainingModal(`${TAG_ICON[stat]} 通常練習: +${gain}`);
+    });
+  });
+}
+document.getElementById("train-btn").addEventListener("click", ()=>{
+  renderTrainingModal();
+  document.getElementById("training-modal").style.display = "flex";
+});
+document.getElementById("training-modal-close").addEventListener("click", ()=>{ document.getElementById("training-modal").style.display = "none"; });
+// 負けて献上した土地は、その相手(候補地)に吸収されて相手を強くする。
+// state.enemyAbsorbed: 候補地ID -> 吸収した(元自軍だった)ユニットIDのSet
+function absorbedUnitsOf(id){ return (state && state.enemyAbsorbed && state.enemyAbsorbed.get(id)) || null; }
+function baseStats(name){
+  const absorbed = absorbedUnitsOf(name);
+  if(!absorbed || absorbed.size===0){
+    // 吸収した土地が無ければ今まで通り単体そのまま(合算の頭打ちはかけない)
+    const u = UNITS[name];
+    let mult = {bat:1,pitch:1,field:1};
+    u.tags.forEach(t=>mult[t.stat]+=t.mult);
+    const base = rawBase(name);
+    return { bat:Math.round(base*mult.bat), pitch:Math.round(base*mult.pitch), field:Math.round(base*mult.field),
+      pitchDepth: u.tags.filter(t=>t.stat==="pitch").length+1 };
+  }
+  // 吸収した土地がある場合は複数ユニット分の合算になるので、雪だるま防止と同じ頭打ちを適用する
+  let rawSum = rawBase(name);
+  const tagMap = new Map();
+  UNITS[name].tags.forEach(t=>{ if(!tagMap.has(t.label)) tagMap.set(t.label,t); });
+  absorbed.forEach(id=>{ rawSum += rawBase(id); UNITS[id].tags.forEach(t=>{ if(!tagMap.has(t.label)) tagMap.set(t.label,t); }); });
+  const compressedBase = compressSum(rawSum, RAWBASE_SUM_K);
+  const rawMultSum = {bat:0,pitch:0,field:0}; let pitchTagCount=0;
+  tagMap.forEach(t=>{ rawMultSum[t.stat]+=t.mult; if(t.stat==="pitch") pitchTagCount++; });
+  const mult = {
+    bat: 1+compressSum(rawMultSum.bat, TAGMULT_SUM_K),
+    pitch: 1+compressSum(rawMultSum.pitch, TAGMULT_SUM_K),
+    field: 1+compressSum(rawMultSum.field, TAGMULT_SUM_K),
+  };
+  return { bat:Math.round(compressedBase*mult.bat), pitch:Math.round(compressedBase*mult.pitch), field:Math.round(compressedBase*mult.field), pitchDepth:pitchTagCount+1 };
+}
+function decayFor(depth, stage){
+  const base = [1.0,0.3,0.05][stage];
+  const bonus = Math.min((depth-1)*0.15, 0.6);
+  return Math.min(base + (stage===0?0:bonus), 1.0);
+}
+function rollInning(atkBat, defField, defPitch, defDepth, stage){
+  const atkLuck = 0.75+Math.random()*0.5, defLuck = 0.75+Math.random()*0.5;
+  const effAtk = atkBat*atkLuck;
+  const effDef = ((defField+defPitch*decayFor(defDepth,stage))/2)*defLuck;
+  const edge = effAtk-effDef;
+  if(edge<=0) return 0;
+  return Math.min(4, Math.round(Math.sqrt(edge)/4));
+}
+
+// UNITSのキーは内部ID(古賀市::薦野のような複合IDを含む)。画面表示には必ずこれで実名を引く。
+function dispName(id){ return UNITS[id].name; }
+
+// タグの精度が市郡区(3階層)や県(2階層)までしか分からない実話は、同じラベルのタグが
+// 複数の4階層ユニット(例: 下関市の町字348個)に等しく複製されている。これを複数吸収しても
+// 同じ効果が重複加算されないよう、自軍の集計は「生の人口ベース値の合計」×「ユニークなタグの
+// 倍率合計」で計算する(個々のユニット単位でタグ倍率をかけて足し上げない)。
+// 人口は線形だと大都市と町字で600倍以上差が出て人口が支配的になりすぎるため、
+// log(人口)で圧縮する。これにより「人口は多いが無名の土地」と「人口は少ないが伝説級の
+// タグを持つ土地」が接近戦になる(甲子園球場・PL学園級の伝説タグはmultの上限を設けない想定)。
+const POP_BASE_K = 15;
+function rawBase(id){ return Math.log(UNITS[id].pop+1)*POP_BASE_K; }
+// 陣地を増やすほど・タグを集めるほど雪だるま式に強くなりすぎる問題への対策。
+// 単体(1ユニットのrawBaseや、baseStatsが見る単体ユニットのタグ)はそのまま計算するが、
+// 複数を合算した「自軍の総力」「タグ倍率の合計」には平方根の頭打ちをかけ、伸びを鈍らせる。
+// 係数は「よくある1ユニット分の強さ/1タグ分の倍率」あたりで圧縮前後がほぼ一致するよう逆算した値
+// (小さいうちは今までの感触に近く、増えるほど頭打ちが効いてくる)。
+const RAWBASE_SUM_K = 13.5;
+const TAGMULT_SUM_K = 1.22;
+function compressSum(sum, k){ return Math.sqrt(Math.max(sum,0))*k; }
+function recomputeAgg(){
+  const rawMultSum = {bat:0, pitch:0, field:0};
+  let pitchTagCount = 0;
+  state.tagMap.forEach(t=>{
+    if(t.genre==="facility") return; // 施設タグは所持だけではパッシブ効果なし。練習で使うアイテム。
+    rawMultSum[t.stat]+=t.mult; if(t.stat==="pitch") pitchTagCount++;
+  });
+  const mult = {
+    bat: 1+compressSum(rawMultSum.bat, TAGMULT_SUM_K),
+    pitch: 1+compressSum(rawMultSum.pitch, TAGMULT_SUM_K),
+    field: 1+compressSum(rawMultSum.field, TAGMULT_SUM_K),
+  };
+  const compressedBase = compressSum(state.rawBase, RAWBASE_SUM_K);
+  const trained = state.trainedBonus || {bat:0,pitch:0,field:0};
+  state.aggBat = Math.round(compressedBase*mult.bat + trained.bat);
+  state.aggPitch = Math.round(compressedBase*mult.pitch + trained.pitch);
+  state.aggField = Math.round(compressedBase*mult.field + trained.field);
+  state.pitchDepth = pitchTagCount+1;
+}
+
+// ==== スケールアップ(町字[4階層] -> 市郡区[3階層] -> 県) ====
+// これは追加機能ではなくコアコンセプト。人口5万人を超えたら市郡区スケールへの移行を選べる
+// (任意・不可逆)。移行すると、既に取り込んでいた町字はその市郡区の強さから差し引かれる
+// (小倉北区を取り込んで北九州市として戦う時、北九州市側は小倉北区が減った状態、という考え方)。
+const POP_THRESHOLD_LEVEL3 = 50000;
+const level3Adjacency = {};
+Object.keys(level3Groups).forEach(l3=>{ level3Adjacency[l3] = new Set(); });
+names.forEach(n=>{
+  const u = UNITS[n];
+  u.adj.forEach(a=>{
+    const otherL3 = UNITS[a] ? UNITS[a].level3 : null;
+    if(otherL3 && otherL3 !== u.level3){
+      level3Adjacency[u.level3].add(otherL3);
+      level3Adjacency[otherL3].add(u.level3);
+    }
+  });
+});
+function level3RemainingUnits(l3){ return level3Groups[l3].units.filter(id=>!state.owned.has(id)); }
+function level3FullyOwned(l3){ return level3RemainingUnits(l3).length===0; }
+function level3Pop(l3){ return level3RemainingUnits(l3).reduce((s,id)=>s+UNITS[id].pop,0); }
+function level3Area(l3){ return level3RemainingUnits(l3).reduce((s,id)=>s+(UNITS[id].area||0),0); }
+function level3RawBase(l3){ return level3RemainingUnits(l3).reduce((s,id)=>s+rawBase(id),0); }
+function level3TagMapOf(l3){
+  const m = new Map();
+  level3RemainingUnits(l3).forEach(id=>UNITS[id].tags.forEach(t=>{ if(!m.has(t.label)) m.set(t.label,t); }));
+  return m;
+}
+function level3Stats(l3){
+  const compressedBase = compressSum(level3RawBase(l3), RAWBASE_SUM_K);
+  const rawMultSum={bat:0,pitch:0,field:0}; let pitchTagCount=0;
+  level3TagMapOf(l3).forEach(t=>{ rawMultSum[t.stat]+=t.mult; if(t.stat==="pitch") pitchTagCount++; });
+  const mult = {
+    bat: 1+compressSum(rawMultSum.bat, TAGMULT_SUM_K),
+    pitch: 1+compressSum(rawMultSum.pitch, TAGMULT_SUM_K),
+    field: 1+compressSum(rawMultSum.field, TAGMULT_SUM_K),
+  };
+  return { bat:Math.round(compressedBase*mult.bat), pitch:Math.round(compressedBase*mult.pitch), field:Math.round(compressedBase*mult.field), pitchDepth:pitchTagCount+1 };
+}
+// tierを意識した共通アクセサ(選択シート・戦闘の両方から使う)
+function entityStats(id){ return state.scaleTier==="level3" ? level3Stats(id) : baseStats(id); }
+function entityName(id){ return state.scaleTier==="level3" ? id : dispName(id); }
+function entityPop(id){
+  if(state.scaleTier==="level3") return level3Pop(id);
+  const absorbed = absorbedUnitsOf(id);
+  let pop = UNITS[id].pop;
+  if(absorbed) absorbed.forEach(u=>pop+=UNITS[u].pop);
+  return pop;
+}
+function entityArea(id){
+  if(state.scaleTier==="level3") return level3Area(id);
+  const absorbed = absorbedUnitsOf(id);
+  let area = UNITS[id].area||0;
+  if(absorbed) absorbed.forEach(u=>area+=(UNITS[u].area||0));
+  return area;
+}
+function entityTags(id){
+  if(state.scaleTier==="level3") return [...level3TagMapOf(id).values()];
+  const absorbed = absorbedUnitsOf(id);
+  if(!absorbed || absorbed.size===0) return UNITS[id].tags;
+  const tagMap = new Map();
+  UNITS[id].tags.forEach(t=>{ if(!tagMap.has(t.label)) tagMap.set(t.label,t); });
+  absorbed.forEach(u=>UNITS[u].tags.forEach(t=>{ if(!tagMap.has(t.label)) tagMap.set(t.label,t); }));
+  return [...tagMap.values()];
+}
+
+let state = null;
+function newGame(startName){
+  const tagMap = new Map();
+  UNITS[startName].tags.forEach(t=>tagMap.set(t.label, t));
+  state = { startName, chimeraName:dispName(startName), owned:new Set([startName]),
+    scaleTier:"town", ownedLevel3:new Set(),
+    rawBase: rawBase(startName), tagMap,
+    usedFacilityLabels: new Set(), trainedBonus: {bat:0,pitch:0,field:0}, normalPracticeUses: {bat:0,pitch:0,field:0},
+    enemyAbsorbed: new Map(),
+    score:UNITS[startName].area||0, selected:null, mapCtx:null, turnsLeft:30, log:[] };
+  recomputeAgg();
+}
+// 所有ユニットが持つ施設タグのうち、まだ練習に使ってないものを一意ラベルで返す
+// (下関市の町字のように同じ施設が複数ユニットに複製されてても実体は1つなので1回しか使えない)。
+function availableFacilityTags(){
+  const seen = new Map();
+  state.tagMap.forEach((t, label)=>{
+    if(t.genre==="facility" && !state.usedFacilityLabels.has(label)) seen.set(label, t);
+  });
+  return [...seen.values()];
+}
+// 施設をまとめて練習する。施設ごとに個別にガチャを引く(大成功1.5倍20%/普通1.0倍60%/伸び悩み0.5倍20%)。
+// 個数が多いほど大数の法則で期待値(=多いほど元の数値通り)に収束するので、まとめるほど安定する。
+function rollTrainingOutcome(){
+  const r = Math.random();
+  if(r < 0.2) return { mult:1.5, label:"大成功" };
+  if(r < 0.8) return { mult:1.0, label:"普通" };
+  return { mult:0.5, label:"伸び悩み" };
+}
+// rawBase合計(だいたい50〜190くらいが相場)に対して意味のある一押しになるよう、
+// 練習の伸び幅は倍率×5を基準値にする(通常のタグ倍率0.2〜1.5なら1〜7.5、将来の伝説級タグ
+// 倍率3〜5なら15〜25という化け物級の伸びになる)。
+const FACILITY_TRAIN_SCALE = 5;
+function doFacilityTraining(){
+  const targets = availableFacilityTags();
+  if(targets.length===0 || state.turnsLeft<=0) return null;
+  const results = targets.map(t=>{
+    const roll = rollTrainingOutcome();
+    const gain = Math.round(t.mult*roll.mult*FACILITY_TRAIN_SCALE*100)/100;
+    state.usedFacilityLabels.add(t.label);
+    state.trainedBonus[t.stat] += gain;
+    return { label:t.label, stat:t.stat, roll:roll.label, gain };
+  });
+  state.turnsLeft--;
+  recomputeAgg();
+  return results;
+}
+// 施設が無くても使える練習の下駄。同じ能力を繰り返すと伸びが逓減する(公比0.7)ので、
+// タグの無い土地から始めても詰まないための最低保証。基礎値3で収束上限は3/(1-0.7)=10。
+// (施設練習の方が本物のトリビアとして価値が上、という位置づけは崩さない範囲で
+// 「1ターン使う価値がある」と感じられる大きさに引き上げてある)
+function doNormalTraining(stat){
+  if(state.turnsLeft<=0) return null;
+  const n = state.normalPracticeUses[stat];
+  const gain = Math.round(3*Math.pow(0.7,n)*100)/100;
+  state.normalPracticeUses[stat]++;
+  state.trainedBonus[stat] += gain;
+  state.turnsLeft--;
+  recomputeAgg();
+  return gain;
+}
+function candidates(){
+  if(state.scaleTier==="level3"){
+    const c = new Set();
+    // 既に一部(または全部)食い込んでいる市郡区は、完全に自分のものになるまで引き続き候補であり続ける
+    const footholds = new Set(state.ownedLevel3);
+    state.owned.forEach(id=>footholds.add(UNITS[id].level3));
+    footholds.forEach(l3=>{
+      if(!state.ownedLevel3.has(l3)) c.add(l3);
+      (level3Adjacency[l3]||new Set()).forEach(a=>{ if(!state.ownedLevel3.has(a)) c.add(a); });
+    });
+    return [...c];
+  }
+  const c = new Set();
+  state.owned.forEach(n=>UNITS[n].adj.forEach(a=>{ if(!state.owned.has(a)) c.add(a); }));
+  return [...c];
+}
+function totalPop(){ let p=0; state.owned.forEach(n=>p+=UNITS[n].pop); return p; }
+function isRunOver(){
+  if(state.turnsLeft<=0) return true;
+  if(candidates().length>0) return false;
+  if(state.scaleTier==="town") return false; // まだ市郡区スケールへの移行が残っている
+  return true;
+}
+
+function tagBadgeHtml(tags){
+  return tags.length ? `<div style="color:#ffd976;">⭐${tags[0].label.length>16?tags[0].label.slice(0,16)+"…":tags[0].label}${tags.length>1?` +${tags.length-1}`:""}</div>` : "";
+}
+function renderAll(){
+  document.getElementById("hud-name").textContent = state.chimeraName;
+  document.getElementById("hud-count").textContent = state.scaleTier==="level3" ? state.ownedLevel3.size : state.owned.size;
+  document.getElementById("hud-total").textContent = state.scaleTier==="level3" ? Object.keys(level3Groups).length : names.length;
+  document.getElementById("hud-pop").textContent = totalPop().toLocaleString();
+  document.getElementById("hud-score").textContent = Math.round(state.score);
+  document.getElementById("hud-turns").textContent = state.turnsLeft;
+  document.getElementById("own-bat").textContent = state.aggBat;
+  document.getElementById("own-pitch").textContent = state.aggPitch;
+  document.getElementById("own-field").textContent = state.aggField;
+  renderOwnTagsSummary();
+  renderEscalateBox();
+  if(!state.mapCtx){ state.mapCtx = createMapContext("map"); state.mapCtx.onPick = id=>selectUnit(id); }
+  const cands = candidates();
+  const pins = [];
+  state.mapCtx.setLayers((group, pickables)=>{
+    if(state.scaleTier==="level3"){
+      // 市郡区スケール: 町字の形はそのまま出しつつ、色分け・クリック先は市郡区単位でまとめる
+      const pinDone = new Set();
+      names.forEach(n=>{
+        const u = UNITS[n];
+        const l3 = u.level3;
+        const l3Owned = state.ownedLevel3.has(l3);
+        let role="locked", h=0.3, pickTarget=null;
+        if(state.owned.has(n) || l3Owned){ role="owned"; h=1.2; }
+        else if(cands.includes(l3)){ role="candidate"; h=0.9; pickTarget=l3; }
+        addUnitLayer(group, pickables, pickTarget, u.rings, role, h);
+        if(role==="candidate" && !pinDone.has(l3)){
+          pinDone.add(l3);
+          const remaining = level3RemainingUnits(l3).map(id=>UNITS[id].centroid);
+          const cx = remaining.reduce((a,p)=>a+p[0],0)/remaining.length, cz = remaining.reduce((a,p)=>a+p[1],0)/remaining.length;
+          const s = level3Stats(l3), tags = [...level3TagMapOf(l3).values()];
+          pins.push({ id:l3, x:cx, y:h, z:-cz, variant:"candidate",
+            html:`<div>📍 ${l3}</div><div>👥${level3Pop(l3).toLocaleString()}</div>${tagBadgeHtml(tags)}`, onClick:()=>selectUnit(l3) });
+        }
+      });
+    } else {
+      names.forEach(n=>{
+        const u = UNITS[n];
+        let role="locked", h=0.3;
+        if(state.owned.has(n)){ role="owned"; h=1.2; }
+        else if(cands.includes(n)){ role="candidate"; h=0.9; }
+        addUnitLayer(group, pickables, role!=="locked"?n:null, u.rings, role, h);
+        if(role==="candidate"){
+          pins.push({ id:n, x:u.centroid[0], y:h, z:-u.centroid[1], variant:role,
+            html:`<div>📍 ${dispName(n)}</div><div>👥${u.pop.toLocaleString()}</div>${tagBadgeHtml(u.tags)}`, onClick:()=>selectUnit(n) });
+        }
+      });
+    }
+  });
+  state.mapCtx.setPins(pins);
+  if(state.owned.size===1 && state.scaleTier==="town"){
+    const u = UNITS[state.startName];
+    state.mapCtx.setCamera(u.centroid[0], -u.centroid[1], 60, 1.0);
+  }
+  if(isRunOver()) endGame();
+}
+function selectUnit(id){
+  state.selected = id;
+  const s = entityStats(id);
+  const pop = entityPop(id);
+  const tags = entityTags(id);
+  document.getElementById("sheet").style.display = "block";
+  document.getElementById("sel-name").textContent = "📍 " + entityName(id);
+  document.getElementById("sel-info").textContent = `人口${pop.toLocaleString()}人 💥${s.bat} 🥎${s.pitch} 🧤${s.field}`;
+  document.getElementById("sel-tags").innerHTML = tags.length ? tags.map(t=>fmtTag(t, entityName(id))).join(" / ") : "特筆すべき野球タグなし";
+}
+document.getElementById("attack-btn").addEventListener("click", ()=>{
+  if(!state.selected) return;
+  runBattle(state.selected);
+});
+
+function finalizeBattle(battle){
+  const playerTotal = battle.p.reduce((a,b)=>a+b,0);
+  const candThrough8 = battle.c.slice(0,8).reduce((a,b)=>a+b,0);
+  const skip = candThrough8 > playerTotal;
+  const candTotal = skip ? candThrough8 : candThrough8+battle.c[8];
+  return {playerTotal, candTotal, skip};
+}
+function runBattle(id){
+  const c = entityStats(id);
+  const formP = 0.25+Math.random()*1.85, formC = 0.25+Math.random()*1.85;
+  const p=[], cc=[];
+  for(let i=0;i<9;i++){
+    const stage = i<3?0:(i<6?1:2);
+    p.push(rollInning(state.aggBat*formP, c.field*formC, c.pitch*formC, c.pitchDepth, stage));
+    cc.push(rollInning(c.bat*formC, state.aggField*formP, state.aggPitch*formP, state.pitchDepth, stage));
+  }
+  const final = finalizeBattle({p,c:cc});
+  const outcome = final.playerTotal===final.candTotal ? "draw" : (final.playerTotal>final.candTotal ? "win" : "lose");
+  showBattle(id, p, cc, final, outcome);
+}
+// イニングを1つずつ間隔を空けて表(→裏)の順で埋めていく。演出(スイングのコマ等)を後で
+// このrevealCellの中に差し込めるように、1マスずつ確定するタイミングを明示的に作ってある。
+function showBattle(id, p, cc, final, outcome){
+  const candName = entityName(id);
+  document.getElementById("battle-title").textContent = state.chimeraName + " vs " + candName;
+  const table = document.getElementById("battle-table");
+  const emptyInningCells = [1,2,3,4,5,6,7,8,9].map(()=>"<td></td>").join("");
+  table.innerHTML = "<tr><th></th>" + [1,2,3,4,5,6,7,8,9].map(n=>`<th>${n}</th>`).join("") + "<th>R</th></tr>"
+    + `<tr id="battle-row-p"><td>🚩${state.chimeraName}</td>${emptyInningCells}<td id="battle-total-p"></td></tr>`
+    + `<tr id="battle-row-c"><td>${candName}</td>${emptyInningCells}<td id="battle-total-c"></td></tr>`;
+  document.getElementById("battle-result").textContent = "";
+  document.getElementById("battle").style.display = "flex";
+  const closeBtn = document.getElementById("battle-close");
+  closeBtn.disabled = true;
+  const pCells = document.getElementById("battle-row-p").children;
+  const cCells = document.getElementById("battle-row-c").children;
+  // td自体にdisplay:inline-blockをかけるとテーブルの列レイアウトが崩れるので、
+  // アニメーションは中の子spanにだけ適用する(tdは普通のtable-cellのまま保つ)。
+  function revealCell(cell, text){
+    cell.innerHTML = `<span class="cell-pop">${text}</span>`;
+  }
+  let inning = 0;
+  function step(){
+    if(inning>=9){
+      revealCell(document.getElementById("battle-total-p"), final.playerTotal);
+      revealCell(document.getElementById("battle-total-c"), final.candTotal);
+      document.getElementById("battle-result").textContent = {win:"勝利!", lose:"敗北...", draw:"引き分け"}[outcome];
+      closeBtn.disabled = false;
+      return;
+    }
+    revealCell(pCells[inning+1], p[inning]);
+    setTimeout(()=>{
+      revealCell(cCells[inning+1], (final.skip && inning===8) ? "X" : cc[inning]);
+      inning++;
+      setTimeout(step, 260);
+    }, 220);
+  }
+  setTimeout(step, 200);
+  closeBtn.onclick = ()=>{
+    if(closeBtn.disabled) return;
+    document.getElementById("battle").style.display = "none";
+    const finishTurn = ()=>{
+      state.turnsLeft -= 1;
+      document.getElementById("sheet").style.display = "none";
+      state.selected = null;
+      renderAll();
+    };
+    if(outcome==="draw"){
+      state.log.push(`△ ${candName}と引き分け。痛み分けに終わった。`);
+      finishTurn();
+      return;
+    }
+    if(outcome==="win"){
+      const beforeStats = {bat:state.aggBat, pitch:state.aggPitch, field:state.aggField};
+      const beforeLabels = new Set(state.tagMap.keys());
+      if(state.scaleTier==="level3"){
+        // 市郡区を勝ち取る: 既に個別に取り込んでいた町字は按分済み(conservation)なので、
+        // 残っていた分だけを自軍に加える。
+        const remaining = level3RemainingUnits(id);
+        const area = level3Area(id), raw = level3RawBase(id);
+        const tagMap = level3TagMapOf(id);
+        remaining.forEach(u=>state.owned.add(u));
+        state.ownedLevel3.add(id);
+        state.score += area;
+        state.rawBase += raw;
+        tagMap.forEach((t,label)=>{ if(!state.tagMap.has(label)) state.tagMap.set(label, t); });
+      } else {
+        state.owned.add(id);
+        state.score += (UNITS[id].area||0);
+        state.rawBase += rawBase(id);
+        UNITS[id].tags.forEach(t=>{ if(!state.tagMap.has(t.label)) state.tagMap.set(t.label, t); });
+        // この候補地が過去に自軍から献上された土地を吸収していたら、勝った今それも取り戻す
+        const reclaimed = absorbedUnitsOf(id);
+        if(reclaimed){
+          reclaimed.forEach(u=>{
+            state.owned.add(u);
+            state.score += (UNITS[u].area||0);
+            state.rawBase += rawBase(u);
+            UNITS[u].tags.forEach(t=>{ if(!state.tagMap.has(t.label)) state.tagMap.set(t.label, t); });
+          });
+          state.enemyAbsorbed.delete(id);
+        }
+      }
+      recomputeAgg();
+      state.chimeraName = state.chimeraName.slice(0, Math.ceil(state.chimeraName.length/2)) + candName.slice(Math.floor(candName.length/2));
+      state.log.push(`◎ ${candName}を吸収。${state.chimeraName}に。`);
+      showConquestSummary(candName, beforeStats, beforeLabels, finishTurn);
+    } else {
+      showDefeatSummary(id, candName, finishTurn);
+    }
+  };
+}
+// 負けた時に自陣から一番弱い土地(スタート地点は除く)を差し出すペナルティ。
+// 町字スケールのみ対応(市郡区スケールでの敗北はターン消費のみ、土地の割譲は複雑になるので対象外)。
+function pickCedeTarget(){
+  if(state.scaleTier!=="town") return null;
+  const eligible = [...state.owned].filter(id=>id!==state.startName);
+  if(eligible.length===0) return null;
+  return eligible.reduce((weakest,id)=> rawBase(id)<rawBase(weakest) ? id : weakest);
+}
+function cedeUnit(id, absorbedById){
+  state.owned.delete(id);
+  state.score -= (UNITS[id].area||0);
+  state.rawBase -= rawBase(id);
+  // タグは複数ユニットで重複してる可能性があるので、残った所有ユニットから作り直す
+  // (単純な引き算だと、他のユニットも持ってる共有タグまで誤って消してしまう)。
+  const newTagMap = new Map();
+  state.owned.forEach(u=>UNITS[u].tags.forEach(t=>{ if(!newTagMap.has(t.label)) newTagMap.set(t.label,t); }));
+  state.tagMap = newTagMap;
+  recomputeAgg();
+  // 献上した土地は相手に吸収され、その相手はこの土地の分だけ強くなる。
+  if(!state.enemyAbsorbed.has(absorbedById)) state.enemyAbsorbed.set(absorbedById, new Set());
+  state.enemyAbsorbed.get(absorbedById).add(id);
+}
+function showDefeatSummary(candId, candName, onClose){
+  const beforeStats = {bat:state.aggBat, pitch:state.aggPitch, field:state.aggField};
+  const beforePop = totalPop();
+  const cedeId = pickCedeTarget();
+  let bodyText;
+  if(cedeId){
+    const cededName = dispName(cedeId);
+    cedeUnit(cedeId, candId);
+    bodyText = `${candName}に敗北し、土下座して靴まで舐めて許しを乞うた。詫びとして${cededName}を献上することに。${cededName}は${candName}に併合された。`;
+    state.log.push(`✗ ${candName}に敗北。詫びとして${cededName}を献上した。`);
+  } else {
+    bodyText = `${candName}に敗北し、土下座して靴まで舐めて許しを乞うた…が献上できる土地が無く、命だけは拾った。`;
+    state.log.push(`✗ ${candName}に敗北。`);
+  }
+  document.getElementById("defeat-img").src = "assets/defeat.png";
+  document.getElementById("defeat-title").textContent = `✗ ${candName}に敗北`;
+  document.getElementById("defeat-body").textContent = bodyText;
+  const afterPop = totalPop();
+  const deltaLine = cedeId ? ["bat","pitch","field"].map(k=>{
+    const before = beforeStats[k], after = state[{bat:"aggBat",pitch:"aggPitch",field:"aggField"}[k]];
+    return `${TAG_ICON[k]}${before}→${after}(<b style="color:#888;">${after-before}</b>)`;
+  }).join(" ") + ` 👥${beforePop.toLocaleString()}→${afterPop.toLocaleString()}(<b style="color:#888;">${(afterPop-beforePop).toLocaleString()}</b>)` : "";
+  document.getElementById("defeat-delta").innerHTML = deltaLine;
+  document.getElementById("defeat-modal").style.display = "flex";
+  document.getElementById("defeat-modal-close").onclick = ()=>{
+    document.getElementById("defeat-modal").style.display = "none";
+    onClose();
+  };
+}
+// 勝利して吸収した直後に、何がどう変わったか(能力の伸び幅・新しく手に入ったタグ)を見せる。
+function showConquestSummary(candName, beforeStats, beforeLabels, onClose){
+  const deltaLine = ["bat","pitch","field"].map(k=>{
+    const before = beforeStats[k], after = state[{bat:"aggBat",pitch:"aggPitch",field:"aggField"}[k]];
+    const diff = after-before;
+    return `${TAG_ICON[k]}${before}→${after}(<b style="color:${diff>0?'var(--green-pop)':'#888'};">${diff>=0?"+":""}${diff}</b>)`;
+  }).join(" ");
+  const newTags = [...state.tagMap.entries()].filter(([label])=>!beforeLabels.has(label)).map(([,t])=>t);
+  document.getElementById("conquest-img").src = "assets/win.png";
+  document.getElementById("conquest-title").textContent = `◎ ${candName}に勝利して吸収した`;
+  document.getElementById("conquest-delta").innerHTML = deltaLine;
+  document.getElementById("conquest-tags").innerHTML = newTags.length
+    ? "入手したタグ: " + newTags.map(t=>fmtTag(t, candName)).join(" / ")
+    : "入手した新しいタグはなし(既に持っているタグと重複)";
+  document.getElementById("conquest-modal").style.display = "flex";
+  document.getElementById("conquest-modal-close").onclick = ()=>{
+    document.getElementById("conquest-modal").style.display = "none";
+    onClose();
+  };
+}
+
+// ---- スケールアップUI(任意・不可逆。確認のため2回押す) ----
+// スケール移行は前は「もう一度押すと確定」という4秒タイマー式だったが、意図が伝わりにくいので
+// 丸アイコンを押すと確認ウィンドウが開く形に変更(練習ボタンと同じ「アイコン→ウィンドウ」の作法に揃える)。
+function renderEscalateBox(){
+  const btn = document.getElementById("escalate-btn");
+  if(state.scaleTier==="level3"){ btn.style.display = "none"; return; }
+  btn.style.display = totalPop()>=POP_THRESHOLD_LEVEL3 ? "inline-flex" : "none";
+}
+document.getElementById("escalate-btn").addEventListener("click", ()=>{
+  document.getElementById("escalate-modal-body").textContent =
+    `${state.chimeraName}は町字での勢力拡大を打ち切り、市郡区スケールでの戦いに移行します。一度移行すると町字スケールには戻れません。`;
+  document.getElementById("escalate-modal").style.display = "flex";
+});
+document.getElementById("escalate-confirm-btn").addEventListener("click", ()=>{
+  state.scaleTier = "level3";
+  state.log.push(`▲ ${state.chimeraName}は町字での勢力拡大を打ち切り、市郡区スケールでの戦いに移行した`);
+  // 既に市郡区内を全部取り込んでいたら、その市郡区は無傷でそのまま編入される
+  Object.keys(level3Groups).forEach(l3=>{
+    if(level3FullyOwned(l3)) state.ownedLevel3.add(l3);
+  });
+  document.getElementById("escalate-modal").style.display = "none";
+  renderAll();
+});
+document.getElementById("escalate-modal-close").addEventListener("click", ()=>{ document.getElementById("escalate-modal").style.display = "none"; });
+
+// ---- 終了画面・ベストスコア ----
+function bestScoreKey(){ return "gikyo_fukuoka_best_" + state.startName; }
+function getBestScore(){ try { return parseInt(localStorage.getItem(bestScoreKey())||"0",10); } catch(e){ return 0; } }
+function saveBestScore(score){ try { const cur=getBestScore(); if(score>cur){ localStorage.setItem(bestScoreKey(), String(Math.round(score))); return true; } return false; } catch(e){ return false; } }
+let gameEnded = false;
+function endGame(){
+  if(gameEnded) return;
+  gameEnded = true;
+  const isNewBest = saveBestScore(state.score);
+  document.getElementById("end-name").textContent = state.chimeraName;
+  document.getElementById("end-score").textContent = Math.round(state.score).toLocaleString() + " km²";
+  document.getElementById("end-best").textContent = isNewBest ? "🏆 自己ベスト更新!" : `自己ベスト: ${getBestScore().toLocaleString()} km²`;
+  document.getElementById("training-modal").style.display = "none";
+  document.getElementById("escalate-modal").style.display = "none";
+  document.getElementById("end-screen").style.display = "flex";
+}
+document.getElementById("end-restart-btn").addEventListener("click", ()=>{
+  document.getElementById("end-screen").style.display = "none";
+  gameEnded = false;
+  document.getElementById("map").innerHTML = ""; // 前回対局のWebGLキャンバスを破棄してから作り直す
+  document.getElementById("start-screen").style.display = "block";
+  renderPrefList();
+});
+
+// ---- start screen: 県(文字)→市郡区(文字)→その中身だけを地図で選択、の3段階 ----
+// 全ユニットを一度に地図に出すと2197ピンで見づらいので、選んだ市郡区の中身だけを見せる。
+function pinHtml(name, s, tags){
+  // タグがある区画はピンの時点で分かるようにする(選ぶ楽しさのため、詳細を開かなくても見える)
+  const tagBadge = (tags && tags.length)
+    ? `<div style="color:#ffd976;">⭐${tags[0].label.length>16 ? tags[0].label.slice(0,16)+"…" : tags[0].label}${tags.length>1 ? ` +${tags.length-1}`:""}</div>`
+    : "";
+  return `<div>📍 ${name}</div><div>💥${s.bat} 🥎${s.pitch} 🧤${s.field}</div>${tagBadge}`;
+}
+const PREFS = ["福岡県","山口県"];
+
+function showStep(id){
+  ["step-pref","step-level3","step-map"].forEach(s=>{
+    document.getElementById(s).style.display = (s===id) ? (s==="step-map"?"flex":"block") : "none";
+  });
+}
+function renderPrefList(){
+  const el = document.getElementById("pref-list"); el.innerHTML = "";
+  PREFS.forEach(p=>{
+    const div = document.createElement("div"); div.className = "list-item";
+    div.textContent = p;
+    div.addEventListener("click", ()=>renderLevel3List(p));
+    el.appendChild(div);
+  });
+  showStep("step-pref");
+}
+// 県・市区郡の選択画面でも「こんなのあるんだ」が一目でわかるよう、代表タグをプレビュー表示する
+function level3TagPreview(name){
+  const seen = new Set(); const uniq = [];
+  level3Groups[name].units.forEach(id=>{
+    UNITS[id].tags.forEach(t=>{ if(!seen.has(t.label)){ seen.add(t.label); uniq.push(t); } });
+  });
+  if(uniq.length===0) return "";
+  return `<div style="color:#ffd976;font-size:.75rem;margin-top:.2rem;">⭐${uniq[0].label}${uniq.length>1?` 他${uniq.length-1}件`:""}</div>`;
+}
+function renderLevel3List(pref){
+  const el = document.getElementById("level3-list"); el.innerHTML = "";
+  document.getElementById("level3-title").textContent = pref + " の市区郡を選んでください";
+  Object.keys(level3Groups).filter(k=>level3Groups[k].pref===pref)
+    .sort((a,b)=>level3Groups[b].units.length-level3Groups[a].units.length)
+    .forEach(name=>{
+      const div = document.createElement("div"); div.className = "list-item";
+      div.innerHTML = `<div>${name}(${level3Groups[name].units.length}区画)</div>${level3TagPreview(name)}`;
+      div.addEventListener("click", ()=>openLevel4Map(name));
+      el.appendChild(div);
+    });
+  showStep("step-level3");
+}
+document.getElementById("back-to-pref").addEventListener("click", renderPrefList);
+document.getElementById("back-to-level3").addEventListener("click", ()=>showStep("step-level3"));
+
+let selectedStartName = null;
+let startMapCtx = null;
+let currentLevel3Units = [];
+function openLevel4Map(level3name){
+  currentLevel3Units = level3Groups[level3name].units;
+  selectedStartName = null;
+  document.getElementById("start-sheet").style.display = "none";
+  document.getElementById("start-confirm-btn").disabled = true;
+  document.getElementById("start-title").textContent = `🗾 ${level3name} - ドラッグで視点回転・地元をタップして選んでください`;
+  showStep("step-map");
+  buildStartMap();
+}
+function buildStartMap(){
+  if(!startMapCtx){
+    startMapCtx = createMapContext("start-map");
+    startMapCtx.onPick = id=>selectStart(id);
+  }
+  const pins = [];
+  startMapCtx.setLayers((group, pickables)=>{
+    currentLevel3Units.forEach(n=>{
+      const u = UNITS[n];
+      const isSel = selectedStartName === n;
+      const h = isSel ? 9 : 5;
+      addUnitLayer(group, pickables, n, u.rings, isSel ? "candidate" : "owned", h);
+      const s = baseStats(n);
+      pins.push({ id:n, x:u.centroid[0], y:h, z:-u.centroid[1], variant: isSel?"candidate":"owned",
+        html: pinHtml(dispName(n), s, u.tags), onClick:()=>selectStart(n) });
+    });
+  });
+  startMapCtx.setPins(pins);
+  if(selectedStartName===null){
+    const xs = currentLevel3Units.map(n=>UNITS[n].centroid[0]), zs = currentLevel3Units.map(n=>UNITS[n].centroid[1]);
+    const cx = (Math.min(...xs)+Math.max(...xs))/2, cz = (Math.min(...zs)+Math.max(...zs))/2;
+    const spread = Math.max(Math.max(...xs)-Math.min(...xs), Math.max(...zs)-Math.min(...zs));
+    startMapCtx.setCamera(cx, -cz, Math.max(20, spread*1.3), 0.9);
+  }
+}
+function selectStart(n){
+  selectedStartName = n;
+  const u = UNITS[n];
+  const s = baseStats(n);
+  document.getElementById("start-sheet").style.display = "block";
+  document.getElementById("start-sel-name").textContent = "📍 " + dispName(n);
+  document.getElementById("start-sel-info").textContent = `人口${u.pop.toLocaleString()}人 💥${s.bat} 🥎${s.pitch} 🧤${s.field}`;
+  document.getElementById("start-sel-tags").innerHTML = u.tags.length ? u.tags.map(t=>fmtTag(t, dispName(n))).join(" / ") : "特筆すべき野球タグなし";
+  document.getElementById("start-confirm-btn").disabled = false;
+  buildStartMap();
+}
+document.getElementById("start-confirm-btn").addEventListener("click", ()=>{
+  if(!selectedStartName) return;
+  document.getElementById("start-screen").style.display = "none";
+  newGame(selectedStartName);
+  renderAll();
+});
+renderPrefList();
+</script>
+</body>
+</html>
